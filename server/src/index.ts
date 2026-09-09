@@ -3,7 +3,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
-import { initDatabase } from './db/database';
+import db, { initDatabase } from './db/database';
+import { seed } from './db/seed';
 import authRoutes from './routes/auth.routes';
 import propertiesRoutes from './routes/properties.routes';
 import requirementsRoutes from './routes/requirements.routes';
@@ -13,10 +14,22 @@ import adminRoutes from './routes/admin.routes';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = parseInt(process.env.PORT || '5000', 10);
+const HOST = '0.0.0.0';
 
-// Initialize SQLite schema & auto-seed if fresh
+// Initialize SQLite schema
 initDatabase();
+
+// Auto-seed initial data if fresh database
+try {
+  const propCount = (db.prepare('SELECT COUNT(*) as c FROM properties').get() as any)?.c || 0;
+  if (propCount === 0) {
+    console.log('Database empty. Populating initial seed data (properties, owners, demo users)...');
+    seed();
+  }
+} catch (err: any) {
+  console.error('Auto-seed error:', err?.message || err);
+}
 
 // Middlewares
 app.use(cors({
@@ -32,7 +45,7 @@ app.use('/api/requirements', requirementsRoutes);
 app.use('/api/enquiries', enquiriesRoutes);
 app.use('/api/admin', adminRoutes);
 
-// Health check
+// Health check endpoint (for Render / uptime monitors)
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -41,18 +54,26 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Serve frontend static build if present (for single-service unified deployment on Render)
-const clientDistPath = path.join(__dirname, '../../client/dist');
-if (fs.existsSync(clientDistPath)) {
-  console.log(`📦 Serving client production build from ${clientDistPath}`);
+// Serve frontend static build if present (for Render unified deployment)
+const possibleDistPaths = [
+  path.resolve(process.cwd(), 'client/dist'),
+  path.resolve(__dirname, '../../client/dist'),
+  path.resolve(__dirname, '../client/dist')
+];
+
+const clientDistPath = possibleDistPaths.find(p => fs.existsSync(p));
+
+if (clientDistPath) {
+  console.log(`📦 Serving client production build from: ${clientDistPath}`);
   app.use(express.static(clientDistPath));
 
-  // Catch-all route to support React client-side routing
+  // Catch-all route to support client-side React router
   app.get('*', (req, res) => {
     res.sendFile(path.join(clientDistPath, 'index.html'));
   });
 }
 
-app.listen(PORT, () => {
-  console.log(`🚀 RentNest Server running on port ${PORT}`);
+// Bind to 0.0.0.0 as required by Render
+app.listen(PORT, HOST, () => {
+  console.log(`🚀 RentNest Server running on http://${HOST}:${PORT}`);
 });

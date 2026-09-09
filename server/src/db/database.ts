@@ -1,8 +1,13 @@
 import Database from 'better-sqlite3';
 import path from 'path';
-import { seed } from './seed';
+import fs from 'fs';
 
-const dbPath = path.join(__dirname, '../../rentconsult.db');
+const dbPath = process.env.DB_PATH || path.resolve(process.cwd(), 'rentconsult.db');
+const dbDir = path.dirname(dbPath);
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+}
+
 const db = new Database(dbPath);
 
 // Enable WAL mode and foreign keys for performance and data integrity
@@ -125,17 +130,6 @@ export function initDatabase() {
       UNIQUE(user_id, property_id)
     );
   `);
-
-  // Auto-seed if database is fresh
-  try {
-    const propCount = (db.prepare('SELECT COUNT(*) as c FROM properties').get() as any).c;
-    if (propCount === 0) {
-      console.log('Database empty. Automatically populating initial properties and owners...');
-      seed();
-    }
-  } catch (err) {
-    console.error('Auto-seed check error:', err);
-  }
 }
 
 export default db;
