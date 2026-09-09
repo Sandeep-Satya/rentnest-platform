@@ -1,0 +1,15 @@
+{
+  "name": "house-rental-consultancy-platform",
+  "version": "1.0.0",
+  "description": "House Rental Consultancy Platform (RentNest)",
+  "scripts": {
+    "build": "npm --prefix client install && npm --prefix client run build && npm --prefix server install && npm --prefix server run build",
+    "start": "node server/dist/index.js",
+    "seed": "npm --prefix server run seed",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev"
+  },
+  "keywords": ["rental", "consultancy", "real-estate", "react", "express", "sqlite", "render"],
+  "author": "",
+  "license": "ISC"
+}

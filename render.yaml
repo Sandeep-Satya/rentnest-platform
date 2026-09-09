@@ -1,0 +1,15 @@
+services:
+  # Unified Web Service (Express + React SPA)
+  - type: web
+    name: rentnest-consultancy
+    runtime: node
+    plan: free
+    buildCommand: npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: PORT
+        value: 10000
