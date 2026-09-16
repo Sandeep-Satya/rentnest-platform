@@ -39,31 +39,33 @@ export const Navbar: React.FC = () => {
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
-            <span className="text-slate-400">Quick Test Drive:</span>
-            <button
-              onClick={() => demoLogin('customer')}
-              className={`px-2 py-0.5 rounded text-[11px] font-semibold transition ${
-                user?.role === 'customer'
-                  ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
-              }`}
-            >
-              👤 Tenant Mode
-            </button>
-            <button
-              onClick={() => {
-                demoLogin('admin').then(() => navigate('/admin'));
-              }}
-              className={`px-2 py-0.5 rounded text-[11px] font-semibold transition ${
-                user?.role === 'admin'
-                  ? 'bg-purple-600 text-white shadow-sm'
-                  : 'bg-slate-800 hover:bg-purple-900/50 text-purple-300'
-              }`}
-            >
-              🛡️ Admin Consultant
-            </button>
-          </div>
+          {import.meta.env.DEV && (
+            <div className="flex items-center gap-3">
+              <span className="text-slate-400">Quick Test Drive:</span>
+              <button
+                onClick={() => demoLogin('customer')}
+                className={`px-2 py-0.5 rounded text-[11px] font-semibold transition ${
+                  user?.role === 'customer'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+                }`}
+              >
+                👤 Tenant Mode
+              </button>
+              <button
+                onClick={() => {
+                  demoLogin('admin').then(() => navigate('/admin'));
+                }}
+                className={`px-2 py-0.5 rounded text-[11px] font-semibold transition ${
+                  user?.role === 'admin'
+                    ? 'bg-purple-600 text-white shadow-sm'
+                    : 'bg-slate-800 hover:bg-purple-900/50 text-purple-300'
+                }`}
+              >
+                🛡️ Admin Consultant
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

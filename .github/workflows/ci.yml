@@ -1,0 +1,42 @@
+name: RentNest CI Pipeline
+
+on:
+  push:
+    branches: [ main, testing, dev ]
+  pull_request:
+    branches: [ main, testing, dev ]
+
+jobs:
+  build-and-test:
+    name: Build, Lint & Automated Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: |
+          npm --prefix client install --include=dev
+          npm --prefix server install --include=dev
+
+      - name: Verify Client Build (React + Vite + TypeScript)
+        run: npm --prefix client run build
+
+      - name: Verify Server Build (Node + TypeScript)
+        run: npm --prefix server run build
+
+      - name: Run Automated API & Security Tests
+        run: |
+          # Seed demo data for test environment
+          AUTO_SEED=true PORT=5000 node server/dist/index.js &
+          # Wait for server to start
+          sleep 4
+          # Execute test suite
+          npx ts-node server/test-api.ts

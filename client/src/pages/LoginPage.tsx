@@ -60,28 +60,30 @@ export const LoginPage: React.FC = () => {
           </p>
         </div>
 
-        {/* 1-Click Demo Login Bar */}
-        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2.5">
-          <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 text-center">
-            ⚡ Instant Evaluation Login
-          </span>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => handleDemo('customer')}
-              className="py-2 px-3 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 transition shadow-sm"
-            >
-              👤 Tenant Demo
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDemo('admin')}
-              className="py-2 px-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition shadow-sm"
-            >
-              🛡️ Admin Demo
-            </button>
+        {/* 1-Click Demo Login Bar (Dev Only) */}
+        {import.meta.env.DEV && (
+          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2.5">
+            <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 text-center">
+              ⚡ Instant Evaluation Login
+            </span>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => handleDemo('customer')}
+                className="py-2 px-3 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 transition shadow-sm"
+              >
+                👤 Tenant Demo
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDemo('admin')}
+                className="py-2 px-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition shadow-sm"
+              >
+                🛡️ Admin Demo
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {error && (
           <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-semibold">

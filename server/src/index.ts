@@ -20,10 +20,11 @@ const HOST = '0.0.0.0';
 // Initialize SQLite schema
 initDatabase();
 
-// Auto-seed initial data if fresh database
+// Auto-seed initial data if fresh database (only in local dev or when AUTO_SEED is set)
+const shouldAutoSeed = process.env.AUTO_SEED === 'true' || (process.env.NODE_ENV !== 'production' && !process.env.CI);
 try {
   const propCount = (db.prepare('SELECT COUNT(*) as c FROM properties').get() as any)?.c || 0;
-  if (propCount === 0) {
+  if (propCount === 0 && shouldAutoSeed) {
     console.log('Database empty. Populating initial seed data (properties, owners, demo users)...');
     seed();
   }
