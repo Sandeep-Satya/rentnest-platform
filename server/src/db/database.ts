@@ -3,11 +3,11 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+const isSupabase = process.env.DATABASE_URL?.includes('supabase');
+
 const db = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
-  }
+  ...(isSupabase && { ssl: { rejectUnauthorized: false } })
 });
 
 export async function initDatabase() {
