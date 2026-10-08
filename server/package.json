@@ -23,8 +23,12 @@
     "express": "^4.21.2",
     "house-rental-consultancy-platform": "file:..",
     "jsonwebtoken": "^9.0.2",
+    "pg": "^8.23.1",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.7.3"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1"
   }
 }
