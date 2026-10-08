@@ -5,7 +5,7 @@ import { requireAuth, optionalAuth, AuthRequest } from '../middleware/auth';
 const router = Router();
 
 // Submit an enquiry / "I'm Interested" / "Request Owner Details"
-router.post('/', optionalAuth, (req: AuthRequest, res: Response): void => {
+router.post('/', optionalAuth, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const {
       property_id,
@@ -22,23 +22,25 @@ router.post('/', optionalAuth, (req: AuthRequest, res: Response): void => {
       return;
     }
 
-    const prop = db.prepare('SELECT id, prop_code, title FROM properties WHERE id = ?').get(property_id) as any;
+    const propResult = await db.query('SELECT id, prop_code, title FROM properties WHERE id = $1', [property_id]);
+    const prop = propResult.rows[0];
     if (!prop) {
       res.status(404).json({ error: 'Property listing not found.' });
       return;
     }
 
-    const count = (db.prepare('SELECT COUNT(*) as count FROM enquiries').get() as any).count;
+    const countResult = await db.query('SELECT COUNT(*) as count FROM enquiries');
+    const count = parseInt(countResult.rows[0].count, 10);
     const enquiryCode = `ENQ${100 + count + 1}`;
     const enqId = `enq_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     const userId = req.user ? req.user.id : null;
 
-    db.prepare(`
+    await db.query(`
       INSERT INTO enquiries (
         id, enquiry_code, user_id, property_id, customer_name, customer_phone,
         customer_email, preferred_visit_date, preferred_contact_time, message, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new')
-    `).run(
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'new')
+    `, [
       enqId,
       enquiryCode,
       userId,
@@ -49,7 +51,7 @@ router.post('/', optionalAuth, (req: AuthRequest, res: Response): void => {
       preferred_visit_date || '',
       preferred_contact_time || 'Anytime',
       message || ''
-    );
+    ]);
 
     res.status(201).json({
       message: 'Enquiry submitted successfully! A rental consultant will contact you shortly.',
@@ -63,9 +65,9 @@ router.post('/', optionalAuth, (req: AuthRequest, res: Response): void => {
 });
 
 // Get customer's submitted enquiries
-router.get('/my', requireAuth, (req: AuthRequest, res: Response): void => {
+router.get('/my', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const enquiries = db.prepare(`
+    const enquiriesResult = await db.query(`
       SELECT 
         e.id, e.enquiry_code, e.property_id, e.customer_name, e.customer_phone,
         e.customer_email, e.preferred_visit_date, e.preferred_contact_time,
@@ -75,11 +77,11 @@ router.get('/my', requireAuth, (req: AuthRequest, res: Response): void => {
         p.locality, p.city, p.images
       FROM enquiries e
       JOIN properties p ON e.property_id = p.id
-      WHERE e.user_id = ? OR e.customer_email = ?
+      WHERE e.user_id = $1 OR e.customer_email = $2
       ORDER BY e.created_at DESC
-    `).all(req.user!.id, req.user!.email) as any[];
+    `, [req.user!.id, req.user!.email]);
 
-    const formatted = enquiries.map(e => ({
+    const formatted = enquiriesResult.rows.map((e: any) => ({
       ...e,
       property_images: JSON.parse(e.images || '[]')
     }));
@@ -92,7 +94,7 @@ router.get('/my', requireAuth, (req: AuthRequest, res: Response): void => {
 });
 
 // Toggle favorite property
-router.post('/favorites/toggle', requireAuth, (req: AuthRequest, res: Response): void => {
+router.post('/favorites/toggle', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { property_id } = req.body;
     if (!property_id) {
@@ -100,14 +102,15 @@ router.post('/favorites/toggle', requireAuth, (req: AuthRequest, res: Response):
       return;
     }
 
-    const existing = db.prepare('SELECT id FROM favorites WHERE user_id = ? AND property_id = ?').get(req.user!.id, property_id) as any;
+    const existingResult = await db.query('SELECT id FROM favorites WHERE user_id = $1 AND property_id = $2', [req.user!.id, property_id]);
+    const existing = existingResult.rows[0];
 
     if (existing) {
-      db.prepare('DELETE FROM favorites WHERE id = ?').run(existing.id);
+      await db.query('DELETE FROM favorites WHERE id = $1', [existing.id]);
       res.json({ message: 'Removed from saved properties', isFavorite: false });
     } else {
       const favId = `fav_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-      db.prepare('INSERT INTO favorites (id, user_id, property_id) VALUES (?, ?, ?)').run(favId, req.user!.id, property_id);
+      await db.query('INSERT INTO favorites (id, user_id, property_id) VALUES ($1, $2, $3)', [favId, req.user!.id, property_id]);
       res.json({ message: 'Saved to favorite properties', isFavorite: true });
     }
   } catch (error) {
@@ -117,9 +120,9 @@ router.post('/favorites/toggle', requireAuth, (req: AuthRequest, res: Response):
 });
 
 // Get user's favorites
-router.get('/favorites/my', requireAuth, (req: AuthRequest, res: Response): void => {
+router.get('/favorites/my', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const favorites = db.prepare(`
+    const favoritesResult = await db.query(`
       SELECT 
         f.id as favorite_id, f.created_at as saved_at,
         p.id, p.prop_code, p.title, p.property_type, p.bhk, p.bedrooms, p.bathrooms,
@@ -127,11 +130,11 @@ router.get('/favorites/my', requireAuth, (req: AuthRequest, res: Response): void
         p.parking, p.furnishing, p.images, p.status
       FROM favorites f
       JOIN properties p ON f.property_id = p.id
-      WHERE f.user_id = ?
+      WHERE f.user_id = $1
       ORDER BY f.created_at DESC
-    `).all(req.user!.id) as any[];
+    `, [req.user!.id]);
 
-    const formatted = favorites.map(f => ({
+    const formatted = favoritesResult.rows.map((f: any) => ({
       ...f,
       images: JSON.parse(f.images || '[]')
     }));

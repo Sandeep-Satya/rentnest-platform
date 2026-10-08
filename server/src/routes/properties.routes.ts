@@ -79,7 +79,7 @@ export function computePropertyMatch(prop: any, req: any) {
 }
 
 // Get all properties with filtering and optional user match scoring
-router.get('/', optionalAuth, (req: AuthRequest, res: Response): void => {
+router.get('/', optionalAuth, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const {
       city,
@@ -117,28 +117,28 @@ router.get('/', optionalAuth, (req: AuthRequest, res: Response): void => {
     const params: any[] = [];
 
     if (city) {
-      query += ` AND LOWER(city) = LOWER(?)`;
       params.push(city);
+      query += ` AND LOWER(city) = LOWER($${params.length})`;
     }
     if (locality) {
-      query += ` AND LOWER(locality) = LOWER(?)`;
       params.push(locality);
+      query += ` AND LOWER(locality) = LOWER($${params.length})`;
     }
     if (propertyType) {
-      query += ` AND property_type = ?`;
       params.push(propertyType);
+      query += ` AND property_type = $${params.length}`;
     }
     if (bhk) {
-      query += ` AND bhk = ?`;
       params.push(Number(bhk));
+      query += ` AND bhk = $${params.length}`;
     }
     if (minRent) {
-      query += ` AND rent >= ?`;
       params.push(Number(minRent));
+      query += ` AND rent >= $${params.length}`;
     }
     if (maxRent) {
-      query += ` AND rent <= ?`;
       params.push(Number(maxRent));
+      query += ` AND rent <= $${params.length}`;
     }
     if (parking && parking !== 'Any') {
       if (parking === 'Car + Bike') {
@@ -150,16 +150,16 @@ router.get('/', optionalAuth, (req: AuthRequest, res: Response): void => {
       }
     }
     if (furnishing && furnishing !== 'Any') {
-      query += ` AND furnishing = ?`;
       params.push(furnishing);
+      query += ` AND furnishing = $${params.length}`;
     }
     if (tenantType && tenantType !== 'Any') {
-      query += ` AND (preferred_tenants = ? OR preferred_tenants = 'Any')`;
       params.push(tenantType);
+      query += ` AND (preferred_tenants = $${params.length} OR preferred_tenants = 'Any')`;
     }
     if (maxTravelTime) {
-      query += ` AND travel_time_mins <= ?`;
       params.push(Number(maxTravelTime));
+      query += ` AND travel_time_mins <= $${params.length}`;
     }
     if (petFriendly === 'true' || petFriendly === '1') {
       query += ` AND pet_friendly = 1`;
@@ -180,9 +180,9 @@ router.get('/', optionalAuth, (req: AuthRequest, res: Response): void => {
       query += ` AND gated_community = 1`;
     }
     if (search) {
-      query += ` AND (title LIKE ? OR description LIKE ? OR locality LIKE ? OR address LIKE ?)`;
       const searchPattern = `%${search}%`;
-      params.push(searchPattern, searchPattern, searchPattern, searchPattern);
+      params.push(searchPattern);
+      query += ` AND (title ILIKE $${params.length} OR description ILIKE $${params.length} OR locality ILIKE $${params.length} OR address ILIKE $${params.length})`;
     }
 
     if (sortBy === 'rent_asc') {
@@ -193,19 +193,22 @@ router.get('/', optionalAuth, (req: AuthRequest, res: Response): void => {
       query += ` ORDER BY created_at DESC`;
     }
 
-    const rows = db.prepare(query).all(...params) as any[];
+    const rowsResult = await db.query(query, params);
+    const rows = rowsResult.rows;
 
     // Check if user has saved requirements to compute match
     let userReq: any = null;
     let userFavorites: Set<string> = new Set();
 
     if (req.user) {
-      userReq = db.prepare('SELECT * FROM customer_requirements WHERE user_id = ?').get(req.user.id);
-      const favRows = db.prepare('SELECT property_id FROM favorites WHERE user_id = ?').all(req.user.id) as any[];
-      favRows.forEach(f => userFavorites.add(f.property_id));
+      const userReqResult = await db.query('SELECT * FROM customer_requirements WHERE user_id = $1', [req.user.id]);
+      userReq = userReqResult.rows[0];
+      
+      const favRowsResult = await db.query('SELECT property_id FROM favorites WHERE user_id = $1', [req.user.id]);
+      favRowsResult.rows.forEach((f: any) => userFavorites.add(f.property_id));
     }
 
-    let properties = rows.map(prop => {
+    let properties = rows.map((prop: any) => {
       let images = [];
       try {
         images = JSON.parse(prop.images);
@@ -228,12 +231,15 @@ router.get('/', optionalAuth, (req: AuthRequest, res: Response): void => {
     });
 
     if (sortBy === 'match' && userReq) {
-      properties.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
+      properties.sort((a: any, b: any) => (b.matchScore || 0) - (a.matchScore || 0));
     }
 
     // Get unique localities and stats for filter sidebar
-    const localities = db.prepare('SELECT DISTINCT locality FROM properties ORDER BY locality ASC').all().map((r: any) => r.locality);
-    const cities = db.prepare('SELECT DISTINCT city FROM properties ORDER BY city ASC').all().map((r: any) => r.city);
+    const localitiesResult = await db.query('SELECT DISTINCT locality FROM properties ORDER BY locality ASC');
+    const localities = localitiesResult.rows.map((r: any) => r.locality);
+    
+    const citiesResult = await db.query('SELECT DISTINCT city FROM properties ORDER BY city ASC');
+    const cities = citiesResult.rows.map((r: any) => r.city);
 
     res.json({
       properties,
@@ -254,9 +260,9 @@ router.get('/', optionalAuth, (req: AuthRequest, res: Response): void => {
 });
 
 // Get featured properties for landing page
-router.get('/featured/all', (req: AuthRequest, res: Response): void => {
+router.get('/featured/all', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const rows = db.prepare(`
+    const rowsResult = await db.query(`
       SELECT 
         id, prop_code, title, property_type, bhk, bedrooms, bathrooms,
         rent, deposit, city, locality, address, travel_time_mins, distance_km,
@@ -267,9 +273,9 @@ router.get('/featured/all', (req: AuthRequest, res: Response): void => {
       WHERE status = 'available'
       ORDER BY rent DESC
       LIMIT 6
-    `).all() as any[];
+    `);
 
-    const properties = rows.map(prop => ({
+    const properties = rowsResult.rows.map((prop: any) => ({
       ...prop,
       images: JSON.parse(prop.images || '[]')
     }));
@@ -281,10 +287,10 @@ router.get('/featured/all', (req: AuthRequest, res: Response): void => {
 });
 
 // Get Single Property Details (PUBLIC - Strict Owner Privacy)
-router.get('/:id', optionalAuth, (req: AuthRequest, res: Response): void => {
+router.get('/:id', optionalAuth, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const prop = db.prepare(`
+    const propResult = await db.query(`
       SELECT 
         id, prop_code, title, property_type, bhk, bedrooms, bathrooms,
         rent, deposit, city, locality, address, latitude, longitude,
@@ -293,8 +299,9 @@ router.get('/:id', optionalAuth, (req: AuthRequest, res: Response): void => {
         pet_friendly, gated_community, ground_floor, preferred_tenants,
         description, images, status, created_at, updated_at
       FROM properties
-      WHERE id = ? OR prop_code = ?
-    `).get(id, id) as any;
+      WHERE id = $1 OR prop_code = $2
+    `, [id, id]);
+    const prop = propResult.rows[0];
 
     if (!prop) {
       res.status(404).json({ error: 'Property not found.' });
@@ -312,24 +319,25 @@ router.get('/:id', optionalAuth, (req: AuthRequest, res: Response): void => {
     let matchData = null;
 
     if (req.user) {
-      const fav = db.prepare('SELECT id FROM favorites WHERE user_id = ? AND property_id = ?').get(req.user.id, prop.id);
-      isFavorite = !!fav;
+      const favResult = await db.query('SELECT id FROM favorites WHERE user_id = $1 AND property_id = $2', [req.user.id, prop.id]);
+      isFavorite = !!favResult.rows[0];
 
-      const userReq = db.prepare('SELECT * FROM customer_requirements WHERE user_id = ?').get(req.user.id);
+      const userReqResult = await db.query('SELECT * FROM customer_requirements WHERE user_id = $1', [req.user.id]);
+      const userReq = userReqResult.rows[0];
       if (userReq) {
         matchData = computePropertyMatch(prop, userReq);
       }
     }
 
     // Related similar properties
-    const similarRows = db.prepare(`
+    const similarRowsResult = await db.query(`
       SELECT id, prop_code, title, property_type, bhk, rent, locality, city, images, furnishing
       FROM properties
-      WHERE id != ? AND (locality = ? OR bhk = ?) AND status != 'occupied'
+      WHERE id != $1 AND (locality = $2 OR bhk = $3) AND status != 'occupied'
       LIMIT 3
-    `).all(prop.id, prop.locality, prop.bhk) as any[];
+    `, [prop.id, prop.locality, prop.bhk]);
 
-    const similarProperties = similarRows.map(s => ({
+    const similarProperties = similarRowsResult.rows.map((s: any) => ({
       ...s,
       images: JSON.parse(s.images || '[]')
     }));

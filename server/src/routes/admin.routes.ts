@@ -8,25 +8,25 @@ const router = Router();
 router.use(requireAdmin);
 
 // 1. Dashboard Metrics
-router.get('/dashboard', (req: AuthRequest, res: Response): void => {
+router.get('/dashboard', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const totalProperties = (db.prepare('SELECT COUNT(*) as c FROM properties').get() as any).c;
-    const availableProperties = (db.prepare("SELECT COUNT(*) as c FROM properties WHERE status = 'available'").get() as any).c;
-    const occupiedProperties = (db.prepare("SELECT COUNT(*) as c FROM properties WHERE status = 'occupied'").get() as any).c;
-    const underDiscussionProperties = (db.prepare("SELECT COUNT(*) as c FROM properties WHERE status = 'under_discussion'").get() as any).c;
+    const totalProperties = (await db.query('SELECT COUNT(*) as c FROM properties')).rows[0].c;
+    const availableProperties = (await db.query("SELECT COUNT(*) as c FROM properties WHERE status = 'available'")).rows[0].c;
+    const occupiedProperties = (await db.query("SELECT COUNT(*) as c FROM properties WHERE status = 'occupied'")).rows[0].c;
+    const underDiscussionProperties = (await db.query("SELECT COUNT(*) as c FROM properties WHERE status = 'under_discussion'")).rows[0].c;
 
-    const totalEnquiries = (db.prepare('SELECT COUNT(*) as c FROM enquiries').get() as any).c;
-    const newEnquiries = (db.prepare("SELECT COUNT(*) as c FROM enquiries WHERE status = 'new'").get() as any).c;
-    const inProgressEnquiries = (db.prepare("SELECT COUNT(*) as c FROM enquiries WHERE status IN ('contacted', 'property_shared', 'visit_scheduled', 'negotiation')").get() as any).c;
-    const completedEnquiries = (db.prepare("SELECT COUNT(*) as c FROM enquiries WHERE status = 'completed'").get() as any).c;
+    const totalEnquiries = (await db.query('SELECT COUNT(*) as c FROM enquiries')).rows[0].c;
+    const newEnquiries = (await db.query("SELECT COUNT(*) as c FROM enquiries WHERE status = 'new'")).rows[0].c;
+    const inProgressEnquiries = (await db.query("SELECT COUNT(*) as c FROM enquiries WHERE status IN ('contacted', 'property_shared', 'visit_scheduled', 'negotiation')")).rows[0].c;
+    const completedEnquiries = (await db.query("SELECT COUNT(*) as c FROM enquiries WHERE status = 'completed'")).rows[0].c;
 
-    const totalCustomers = (db.prepare("SELECT COUNT(*) as c FROM users WHERE role = 'customer'").get() as any).c;
-    const totalOwners = (db.prepare('SELECT COUNT(*) as c FROM property_owners').get() as any).c;
+    const totalCustomers = (await db.query("SELECT COUNT(*) as c FROM users WHERE role = 'customer'")).rows[0].c;
+    const totalOwners = (await db.query('SELECT COUNT(*) as c FROM property_owners')).rows[0].c;
 
-    const totalCommission = (db.prepare("SELECT COALESCE(SUM(commission_amount), 0) as s FROM enquiries WHERE status = 'completed'").get() as any).s;
+    const totalCommission = (await db.query("SELECT COALESCE(SUM(commission_amount), 0) as s FROM enquiries WHERE status = 'completed'")).rows[0].s;
 
     // Recent leads
-    const recentEnquiries = db.prepare(`
+    const recentEnquiriesResult = await db.query(`
       SELECT 
         e.id, e.enquiry_code, e.customer_name, e.customer_phone, e.customer_email,
         e.status, e.created_at, e.preferred_visit_date, e.owner_details_shared,
@@ -35,30 +35,32 @@ router.get('/dashboard', (req: AuthRequest, res: Response): void => {
       JOIN properties p ON e.property_id = p.id
       ORDER BY e.created_at DESC
       LIMIT 6
-    `).all();
+    `);
+    const recentEnquiries = recentEnquiriesResult.rows;
 
     // Locality breakdown
-    const localityStats = db.prepare(`
+    const localityStatsResult = await db.query(`
       SELECT locality, COUNT(*) as count, AVG(rent) as avg_rent
       FROM properties
       GROUP BY locality
       ORDER BY count DESC
       LIMIT 5
-    `).all();
+    `);
+    const localityStats = localityStatsResult.rows;
 
     res.json({
       metrics: {
-        totalProperties,
-        availableProperties,
-        occupiedProperties,
-        underDiscussionProperties,
-        totalEnquiries,
-        newEnquiries,
-        inProgressEnquiries,
-        completedEnquiries,
-        totalCustomers,
-        totalOwners,
-        totalCommission
+        totalProperties: Number(totalProperties),
+        availableProperties: Number(availableProperties),
+        occupiedProperties: Number(occupiedProperties),
+        underDiscussionProperties: Number(underDiscussionProperties),
+        totalEnquiries: Number(totalEnquiries),
+        newEnquiries: Number(newEnquiries),
+        inProgressEnquiries: Number(inProgressEnquiries),
+        completedEnquiries: Number(completedEnquiries),
+        totalCustomers: Number(totalCustomers),
+        totalOwners: Number(totalOwners),
+        totalCommission: Number(totalCommission)
       },
       recentEnquiries,
       localityStats
@@ -70,9 +72,9 @@ router.get('/dashboard', (req: AuthRequest, res: Response): void => {
 });
 
 // 2. Properties Management (Includes Private Owner Details)
-router.get('/properties', (req: AuthRequest, res: Response): void => {
+router.get('/properties', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const properties = db.prepare(`
+    const propertiesResult = await db.query(`
       SELECT 
         p.*,
         o.name as owner_name, o.phone as owner_phone, o.email as owner_email,
@@ -80,9 +82,10 @@ router.get('/properties', (req: AuthRequest, res: Response): void => {
       FROM properties p
       LEFT JOIN property_owners o ON p.owner_id = o.id
       ORDER BY p.created_at DESC
-    `).all() as any[];
+    `);
+    const properties = propertiesResult.rows;
 
-    const formatted = properties.map(p => ({
+    const formatted = properties.map((p: any) => ({
       ...p,
       images: JSON.parse(p.images || '[]')
     }));
@@ -95,7 +98,7 @@ router.get('/properties', (req: AuthRequest, res: Response): void => {
 });
 
 // Add New Property
-router.post('/properties', (req: AuthRequest, res: Response): void => {
+router.post('/properties', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const {
       title, property_type, bhk, bedrooms, bathrooms, rent, deposit,
@@ -119,17 +122,18 @@ router.post('/properties', (req: AuthRequest, res: Response): void => {
     // If owner name/phone is provided without an existing owner_id, create new owner
     if (!finalOwnerId && owner_name && owner_phone) {
       finalOwnerId = `own_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-      db.prepare(`
+      await db.query(`
         INSERT INTO property_owners (id, name, phone, email, notes, commission_terms)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(finalOwnerId, owner_name, owner_phone, owner_email || '', owner_notes || '', commission_terms || '15 Days Rent');
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `, [finalOwnerId, owner_name, owner_phone, owner_email || '', owner_notes || '', commission_terms || '15 Days Rent']);
     }
 
-    const count = (db.prepare('SELECT COUNT(*) as count FROM properties').get() as any).count;
+    const countResult = await db.query('SELECT COUNT(*) as count FROM properties');
+    const count = Number(countResult.rows[0].count);
     const propCode = `PROP${String(count + 1).padStart(3, '0')}`;
     const propId = `prop_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
 
-    db.prepare(`
+    await db.query(`
       INSERT INTO properties (
         id, prop_code, title, property_type, bhk, bedrooms, bathrooms,
         rent, deposit, city, locality, address, latitude, longitude,
@@ -138,14 +142,14 @@ router.post('/properties', (req: AuthRequest, res: Response): void => {
         pet_friendly, gated_community, ground_floor, preferred_tenants,
         description, images, status, owner_id
       ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?,
-        ?, ?, ?, ?,
-        ?, ?, ?, ?
+        $1, $2, $3, $4, $5, $6, $7,
+        $8, $9, $10, $11, $12, $13, $14,
+        $15, $16, $17, $18, $19,
+        $20, $21, $22, $23, $24,
+        $25, $26, $27, $28,
+        $29, $30, $31, $32
       )
-    `).run(
+    `, [
       propId, propCode, title, property_type || 'Apartment', Number(bhk), Number(bedrooms || bhk),
       Number(bathrooms || bhk), Number(rent), Number(deposit || rent * 2),
       city, locality, address, Number(latitude || 17.44), Number(longitude || 78.38),
@@ -155,7 +159,7 @@ router.post('/properties', (req: AuthRequest, res: Response): void => {
       pet_friendly ? 1 : 0, gated_community ? 1 : 0, ground_floor ? 1 : 0,
       preferred_tenants, description || '', JSON.stringify(images),
       status, finalOwnerId || null
-    );
+    ]);
 
     res.status(201).json({
       message: 'Property created successfully',
@@ -169,7 +173,7 @@ router.post('/properties', (req: AuthRequest, res: Response): void => {
 });
 
 // Update Property
-router.put('/properties/:id', (req: AuthRequest, res: Response): void => {
+router.put('/properties/:id', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     const {
@@ -181,7 +185,8 @@ router.put('/properties/:id', (req: AuthRequest, res: Response): void => {
       owner_name, owner_phone, owner_email, owner_notes, commission_terms
     } = req.body;
 
-    const existing = db.prepare('SELECT * FROM properties WHERE id = ?').get(id) as any;
+    const existingResult = await db.query('SELECT * FROM properties WHERE id = $1', [id]);
+    const existing = existingResult.rows[0];
     if (!existing) {
       res.status(404).json({ error: 'Property not found.' });
       return;
@@ -191,35 +196,35 @@ router.put('/properties/:id', (req: AuthRequest, res: Response): void => {
 
     // Update owner details if provided
     if (finalOwnerId && (owner_name || owner_phone || owner_email || owner_notes || commission_terms)) {
-      db.prepare(`
+      await db.query(`
         UPDATE property_owners SET
-          name = COALESCE(?, name),
-          phone = COALESCE(?, phone),
-          email = COALESCE(?, email),
-          notes = COALESCE(?, notes),
-          commission_terms = COALESCE(?, commission_terms)
-        WHERE id = ?
-      `).run(owner_name, owner_phone, owner_email, owner_notes, commission_terms, finalOwnerId);
+          name = COALESCE($1, name),
+          phone = COALESCE($2, phone),
+          email = COALESCE($3, email),
+          notes = COALESCE($4, notes),
+          commission_terms = COALESCE($5, commission_terms)
+        WHERE id = $6
+      `, [owner_name, owner_phone, owner_email, owner_notes, commission_terms, finalOwnerId]);
     } else if (!finalOwnerId && owner_name && owner_phone) {
       finalOwnerId = `own_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-      db.prepare(`
+      await db.query(`
         INSERT INTO property_owners (id, name, phone, email, notes, commission_terms)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(finalOwnerId, owner_name, owner_phone, owner_email || '', owner_notes || '', commission_terms || '15 Days Rent');
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `, [finalOwnerId, owner_name, owner_phone, owner_email || '', owner_notes || '', commission_terms || '15 Days Rent']);
     }
 
-    db.prepare(`
+    await db.query(`
       UPDATE properties SET
-        title = ?, property_type = ?, bhk = ?, bedrooms = ?, bathrooms = ?,
-        rent = ?, deposit = ?, city = ?, locality = ?, address = ?,
-        latitude = ?, longitude = ?, available_from = ?, travel_time_mins = ?,
-        distance_km = ?, parking = ?, furnishing = ?, water_availability = ?,
-        power_backup = ?, lift = ?, security = ?, balcony = ?,
-        pet_friendly = ?, gated_community = ?, ground_floor = ?,
-        preferred_tenants = ?, description = ?, images = ?, status = ?,
-        owner_id = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run(
+        title = $1, property_type = $2, bhk = $3, bedrooms = $4, bathrooms = $5,
+        rent = $6, deposit = $7, city = $8, locality = $9, address = $10,
+        latitude = $11, longitude = $12, available_from = $13, travel_time_mins = $14,
+        distance_km = $15, parking = $16, furnishing = $17, water_availability = $18,
+        power_backup = $19, lift = $20, security = $21, balcony = $22,
+        pet_friendly = $23, gated_community = $24, ground_floor = $25,
+        preferred_tenants = $26, description = $27, images = $28, status = $29,
+        owner_id = $30, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $31
+    `, [
       title, property_type, Number(bhk), Number(bedrooms), Number(bathrooms),
       Number(rent), Number(deposit), city, locality, address,
       Number(latitude), Number(longitude), available_from, Number(travel_time_mins),
@@ -228,7 +233,7 @@ router.put('/properties/:id', (req: AuthRequest, res: Response): void => {
       pet_friendly ? 1 : 0, gated_community ? 1 : 0, ground_floor ? 1 : 0,
       preferred_tenants, description, JSON.stringify(images), status,
       finalOwnerId || null, id
-    );
+    ]);
 
     res.json({ message: 'Property updated successfully.' });
   } catch (error) {
@@ -238,10 +243,10 @@ router.put('/properties/:id', (req: AuthRequest, res: Response): void => {
 });
 
 // Delete Property
-router.delete('/properties/:id', (req: AuthRequest, res: Response): void => {
+router.delete('/properties/:id', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    db.prepare('DELETE FROM properties WHERE id = ?').run(id);
+    await db.query('DELETE FROM properties WHERE id = $1', [id]);
     res.json({ message: 'Property deleted successfully.' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete property.' });
@@ -249,7 +254,7 @@ router.delete('/properties/:id', (req: AuthRequest, res: Response): void => {
 });
 
 // Quick toggle property status
-router.patch('/properties/:id/status', (req: AuthRequest, res: Response): void => {
+router.patch('/properties/:id/status', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     const { status } = req.body; // 'available' | 'under_discussion' | 'occupied'
@@ -259,7 +264,7 @@ router.patch('/properties/:id/status', (req: AuthRequest, res: Response): void =
       return;
     }
 
-    db.prepare('UPDATE properties SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(status, id);
+    await db.query('UPDATE properties SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [status, id]);
     res.json({ message: `Property marked as ${status}.` });
   } catch (error) {
     res.status(500).json({ error: 'Failed to update property status.' });
@@ -267,7 +272,7 @@ router.patch('/properties/:id/status', (req: AuthRequest, res: Response): void =
 });
 
 // 3. Enquiries / Leads Management
-router.get('/enquiries', (req: AuthRequest, res: Response): void => {
+router.get('/enquiries', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { status, search } = req.query;
     let query = `
@@ -284,20 +289,22 @@ router.get('/enquiries', (req: AuthRequest, res: Response): void => {
     const params: any[] = [];
 
     if (status && status !== 'all') {
-      query += ` AND e.status = ?`;
       params.push(status);
+      query += ` AND e.status = $${params.length}`;
     }
     if (search) {
-      query += ` AND (e.customer_name LIKE ? OR e.customer_phone LIKE ? OR e.enquiry_code LIKE ? OR p.title LIKE ?)`;
       const s = `%${search}%`;
       params.push(s, s, s, s);
+      const l = params.length;
+      query += ` AND (e.customer_name ILIKE $${l-3} OR e.customer_phone ILIKE $${l-2} OR e.enquiry_code ILIKE $${l-1} OR p.title ILIKE $${l})`;
     }
 
     query += ` ORDER BY e.created_at DESC`;
 
-    const enquiries = db.prepare(query).all(...params) as any[];
+    const enquiriesResult = await db.query(query, params);
+    const enquiries = enquiriesResult.rows;
 
-    const formatted = enquiries.map(e => ({
+    const formatted = enquiries.map((e: any) => ({
       ...e,
       property_images: JSON.parse(e.property_images || '[]')
     }));
@@ -310,12 +317,13 @@ router.get('/enquiries', (req: AuthRequest, res: Response): void => {
 });
 
 // Update Enquiry Status & Consultant Notes
-router.patch('/enquiries/:id/status', (req: AuthRequest, res: Response): void => {
+router.patch('/enquiries/:id/status', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     const { status, consultant_notes, commission_amount, owner_details_shared } = req.body;
 
-    const enq = db.prepare('SELECT * FROM enquiries WHERE id = ?').get(id) as any;
+    const enqResult = await db.query('SELECT * FROM enquiries WHERE id = $1', [id]);
+    const enq = enqResult.rows[0];
     if (!enq) {
       res.status(404).json({ error: 'Enquiry not found.' });
       return;
@@ -325,23 +333,23 @@ router.patch('/enquiries/:id/status', (req: AuthRequest, res: Response): void =>
     if (status === 'completed' && !dealClosedAt) {
       dealClosedAt = new Date().toISOString();
       // Also mark property as occupied
-      db.prepare("UPDATE properties SET status = 'occupied' WHERE id = ?").run(enq.property_id);
+      await db.query("UPDATE properties SET status = 'occupied' WHERE id = $1", [enq.property_id]);
     }
 
-    db.prepare(`
+    await db.query(`
       UPDATE enquiries SET
-        status = COALESCE(?, status),
-        consultant_notes = COALESCE(?, consultant_notes),
-        commission_amount = COALESCE(?, commission_amount),
-        owner_details_shared = COALESCE(?, owner_details_shared),
-        deal_closed_at = ?,
+        status = COALESCE($1, status),
+        consultant_notes = COALESCE($2, consultant_notes),
+        commission_amount = COALESCE($3, commission_amount),
+        owner_details_shared = COALESCE($4, owner_details_shared),
+        deal_closed_at = $5,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run(
+      WHERE id = $6
+    `, [
       status, consultant_notes, commission_amount !== undefined ? Number(commission_amount) : null,
       owner_details_shared !== undefined ? (owner_details_shared ? 1 : 0) : null,
       dealClosedAt, id
-    );
+    ]);
 
     res.json({ message: 'Enquiry lead updated successfully.' });
   } catch (error) {
@@ -351,9 +359,9 @@ router.patch('/enquiries/:id/status', (req: AuthRequest, res: Response): void =>
 });
 
 // 4. Property Owners CRM
-router.get('/owners', (req: AuthRequest, res: Response): void => {
+router.get('/owners', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const owners = db.prepare(`
+    const ownersResult = await db.query(`
       SELECT 
         o.*,
         COUNT(p.id) as property_count,
@@ -363,16 +371,16 @@ router.get('/owners', (req: AuthRequest, res: Response): void => {
       LEFT JOIN enquiries e ON p.id = e.property_id
       GROUP BY o.id
       ORDER BY o.created_at DESC
-    `).all();
+    `);
 
-    res.json({ owners });
+    res.json({ owners: ownersResult.rows });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch property owners.' });
   }
 });
 
 // Add Property Owner
-router.post('/owners', (req: AuthRequest, res: Response): void => {
+router.post('/owners', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { name, phone, email, notes, commission_terms } = req.body;
     if (!name || !phone) {
@@ -381,10 +389,10 @@ router.post('/owners', (req: AuthRequest, res: Response): void => {
     }
 
     const id = `own_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-    db.prepare(`
+    await db.query(`
       INSERT INTO property_owners (id, name, phone, email, notes, commission_terms)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(id, name, phone, email || '', notes || '', commission_terms || '15 Days Rent');
+      VALUES ($1, $2, $3, $4, $5, $6)
+    `, [id, name, phone, email || '', notes || '', commission_terms || '15 Days Rent']);
 
     res.status(201).json({ message: 'Property owner added successfully.', ownerId: id });
   } catch (error) {
@@ -393,9 +401,9 @@ router.post('/owners', (req: AuthRequest, res: Response): void => {
 });
 
 // 5. Customer CRM (Profiles & Requirements)
-router.get('/customers', (req: AuthRequest, res: Response): void => {
+router.get('/customers', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const customers = db.prepare(`
+    const customersResult = await db.query(`
       SELECT 
         u.id, u.name, u.email, u.phone, u.created_at,
         r.preferred_city, r.preferred_areas, r.house_types, r.bhk_list,
@@ -408,11 +416,11 @@ router.get('/customers', (req: AuthRequest, res: Response): void => {
       LEFT JOIN enquiries e ON u.id = e.user_id
       LEFT JOIN favorites f ON u.id = f.user_id
       WHERE u.role = 'customer'
-      GROUP BY u.id
+      GROUP BY u.id, r.id
       ORDER BY u.created_at DESC
-    `).all() as any[];
+    `);
 
-    const formatted = customers.map(c => ({
+    const formatted = customersResult.rows.map((c: any) => ({
       ...c,
       preferred_areas: JSON.parse(c.preferred_areas || '[]'),
       house_types: JSON.parse(c.house_types || '[]'),
@@ -428,10 +436,11 @@ router.get('/customers', (req: AuthRequest, res: Response): void => {
 });
 
 // 6. Instagram & Social Media Content Studio
-router.get('/social-studio/:propertyId', (req: AuthRequest, res: Response): void => {
+router.get('/social-studio/:propertyId', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { propertyId } = req.params;
-    const prop = db.prepare('SELECT * FROM properties WHERE id = ?').get(propertyId) as any;
+    const propResult = await db.query('SELECT * FROM properties WHERE id = $1', [propertyId]);
+    const prop = propResult.rows[0];
     if (!prop) {
       res.status(404).json({ error: 'Property not found.' });
       return;
@@ -487,9 +496,9 @@ Property Ref: ${prop.prop_code}`;
 });
 
 // 7. Commission & Revenue Tracker
-router.get('/commissions', (req: AuthRequest, res: Response): void => {
+router.get('/commissions', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const deals = db.prepare(`
+    const dealsResult = await db.query(`
       SELECT 
         e.id, e.enquiry_code, e.customer_name, e.customer_phone,
         e.commission_amount, e.deal_closed_at, e.created_at,
@@ -500,14 +509,18 @@ router.get('/commissions', (req: AuthRequest, res: Response): void => {
       LEFT JOIN property_owners o ON p.owner_id = o.id
       WHERE e.status = 'completed'
       ORDER BY e.deal_closed_at DESC
-    `).all();
+    `);
+    const deals = dealsResult.rows;
 
-    const totalEarned = (db.prepare("SELECT COALESCE(SUM(commission_amount), 0) as total FROM enquiries WHERE status = 'completed'").get() as any).total;
-    const pendingDeals = (db.prepare("SELECT COUNT(*) as count FROM enquiries WHERE status IN ('negotiation', 'visit_scheduled')").get() as any).count;
+    const totalEarnedResult = await db.query("SELECT COALESCE(SUM(commission_amount), 0) as total FROM enquiries WHERE status = 'completed'");
+    const totalEarned = totalEarnedResult.rows[0].total;
+    
+    const pendingDealsResult = await db.query("SELECT COUNT(*) as count FROM enquiries WHERE status IN ('negotiation', 'visit_scheduled')");
+    const pendingDeals = pendingDealsResult.rows[0].count;
 
     res.json({
-      totalEarned,
-      pendingDeals,
+      totalEarned: Number(totalEarned),
+      pendingDeals: Number(pendingDeals),
       closedDealsCount: deals.length,
       deals
     });
