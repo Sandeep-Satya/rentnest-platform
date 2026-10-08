@@ -1,13 +1,13 @@
 import bcrypt from 'bcryptjs';
 import db, { initDatabase } from './database';
 
-export function seed() {
-  initDatabase();
+export async function seed() {
+  await initDatabase();
 
   console.log('Seeding initial data...');
 
   // Clear existing
-  db.exec(`
+  await db.query(`
     DELETE FROM favorites;
     DELETE FROM enquiries;
     DELETE FROM customer_requirements;
@@ -20,41 +20,41 @@ export function seed() {
   const customerPass = bcrypt.hashSync('customer123', 10);
 
   // 1. Users
-  const insertUser = db.prepare(`
+  const insertUser = `
     INSERT INTO users (id, name, email, phone, password_hash, role)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
+    VALUES ($1, $2, $3, $4, $5, $6)
+  `;
 
-  insertUser.run('usr_admin_1', 'Vikram Sharma (Lead Consultant)', 'admin@rentconsult.com', '+91 98765 43210', passwordHash, 'admin');
-  insertUser.run('usr_cust_1', 'Rahul Verma', 'rahul@example.com', '+91 98111 22233', customerPass, 'customer');
-  insertUser.run('usr_cust_2', 'Priya Sundaram', 'priya@example.com', '+91 98222 33344', customerPass, 'customer');
-  insertUser.run('usr_cust_3', 'Amitabh Sengupta', 'amitabh@example.com', '+91 98333 44455', customerPass, 'customer');
+  await db.query(insertUser, ['usr_admin_1', 'Vikram Sharma (Lead Consultant)', 'admin@rentconsult.com', '+91 98765 43210', passwordHash, 'admin']);
+  await db.query(insertUser, ['usr_cust_1', 'Rahul Verma', 'rahul@example.com', '+91 98111 22233', customerPass, 'customer']);
+  await db.query(insertUser, ['usr_cust_2', 'Priya Sundaram', 'priya@example.com', '+91 98222 33344', customerPass, 'customer']);
+  await db.query(insertUser, ['usr_cust_3', 'Amitabh Sengupta', 'amitabh@example.com', '+91 98333 44455', customerPass, 'customer']);
 
   // 2. Property Owners (Strictly Private to Admin)
-  const insertOwner = db.prepare(`
+  const insertOwner = `
     INSERT INTO property_owners (id, name, phone, email, notes, commission_terms)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
+    VALUES ($1, $2, $3, $4, $5, $6)
+  `;
 
-  insertOwner.run('own_1', 'K. V. Ramana Rao', '+91 94401 23456', 'ramana.rao@gmail.com', 'Retired Govt Official. Prefers vegetarian family tenants. Very prompt with maintenance.', '15 Days Rent upon agreement');
-  insertOwner.run('own_2', 'Sunita Reddy', '+91 98490 87654', 'sunita.reddy@yahoo.com', 'NRI owner based in Dubai. Handled via local power of attorney. Open to corporate bachelors.', '1 Month Rent flat commission');
-  insertOwner.run('own_3', 'Capt. Arvind Nair', '+91 99887 65432', 'capt.nair@outlook.com', 'Ex-Merchant Navy. Property newly renovated with Italian tiles and modular kitchen.', '₹15,000 fixed consultancy fee');
-  insertOwner.run('own_4', 'Muralidhar Gupta', '+91 91234 56789', 'muralidhar.g@gmail.com', 'Owns multiple independent floors in Kondapur. Very cordial and supportive owner.', '15 Days Rent upon token advance');
+  await db.query(insertOwner, ['own_1', 'K. V. Ramana Rao', '+91 94401 23456', 'ramana.rao@gmail.com', 'Retired Govt Official. Prefers vegetarian family tenants. Very prompt with maintenance.', '15 Days Rent upon agreement']);
+  await db.query(insertOwner, ['own_2', 'Sunita Reddy', '+91 98490 87654', 'sunita.reddy@yahoo.com', 'NRI owner based in Dubai. Handled via local power of attorney. Open to corporate bachelors.', '1 Month Rent flat commission']);
+  await db.query(insertOwner, ['own_3', 'Capt. Arvind Nair', '+91 99887 65432', 'capt.nair@outlook.com', 'Ex-Merchant Navy. Property newly renovated with Italian tiles and modular kitchen.', '₹15,000 fixed consultancy fee']);
+  await db.query(insertOwner, ['own_4', 'Muralidhar Gupta', '+91 91234 56789', 'muralidhar.g@gmail.com', 'Owns multiple independent floors in Kondapur. Very cordial and supportive owner.', '15 Days Rent upon token advance']);
 
   // 3. Properties
-  const insertProp = db.prepare(`
+  const insertProp = `
     INSERT INTO properties (
       id, prop_code, title, property_type, bhk, bedrooms, bathrooms, rent, deposit,
       city, locality, address, latitude, longitude, available_from, travel_time_mins, distance_km,
       parking, furnishing, water_availability, power_backup, lift, security, balcony,
       pet_friendly, gated_community, ground_floor, preferred_tenants, description, images, status, owner_id
     ) VALUES (
-      ?, ?, ?, ?, ?, ?, ?, ?, ?,
-      ?, ?, ?, ?, ?, ?, ?, ?,
-      ?, ?, ?, ?, ?, ?, ?,
-      ?, ?, ?, ?, ?, ?, ?, ?
+      $1, $2, $3, $4, $5, $6, $7, $8, $9,
+      $10, $11, $12, $13, $14, $15, $16, $17,
+      $18, $19, $20, $21, $22, $23, $24,
+      $25, $26, $27, $28, $29, $30, $31, $32
     )
-  `);
+  `;
 
   const prop1Images = JSON.stringify([
     'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1200&q=80',
@@ -63,7 +63,7 @@ export function seed() {
     'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1200&q=80'
   ]);
 
-  insertProp.run(
+  await db.query(insertProp, [
     'prop_1',
     'PROP001',
     'Spacious 2 BHK High-Rise Apartment with Skyline View',
@@ -76,7 +76,7 @@ export function seed() {
     1, 1, 0, 'Family',
     'Sunlit and well-ventilated 2 BHK apartment in a premium gated community at the heart of Madhapur. Features 2 large balconies overlooking Durgam Cheruvu, modular kitchen with chimney, teak-wood wardrobes in both bedrooms, 24/7 Manjeera water, clubhouse access, swimming pool, and round-the-clock CCTV security.',
     prop1Images, 'available', 'own_1'
-  );
+  ]);
 
   const prop2Images = JSON.stringify([
     'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1200&q=80',
@@ -85,7 +85,7 @@ export function seed() {
     'https://images.unsplash.com/photo-1613977257363-707ba9348227?auto=format&fit=crop&w=1200&q=80'
   ]);
 
-  insertProp.run(
+  await db.query(insertProp, [
     'prop_2',
     'PROP002',
     'Luxury 3 BHK Gated Community Flat with 2 Balconies',
@@ -98,7 +98,7 @@ export function seed() {
     0, 1, 0, 'Working Professionals',
     'Impeccably furnished 3 BHK residence with premium Italian leather sofas, Sony 55-inch smart LED TV, king-size orthopedic beds in all 3 rooms, 4-burner Faber gas hob, Samsung double-door refrigerator, and automatic washing machine. 5 mins drive to Amazon and Microsoft campus.',
     prop2Images, 'available', 'own_2'
-  );
+  ]);
 
   const prop3Images = JSON.stringify([
     'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=1200&q=80',
@@ -106,7 +106,7 @@ export function seed() {
     'https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?auto=format&fit=crop&w=1200&q=80'
   ]);
 
-  insertProp.run(
+  await db.query(insertProp, [
     'prop_3',
     'PROP003',
     'Cozy & Modern 1 BHK Studio for Bachelors/Solo Professional',
@@ -119,7 +119,7 @@ export function seed() {
     1, 0, 0, 'Bachelors',
     'Independent 1 BHK flat with dedicated bike parking, AC in bedroom, geyser in bathroom, and high-speed fiber internet provision. Walking distance to Botanical Garden and prominent supermarkets & dining spots.',
     prop3Images, 'available', 'own_4'
-  );
+  ]);
 
   const prop4Images = JSON.stringify([
     'https://images.unsplash.com/photo-1600585154526-990dced4db0d?auto=format&fit=crop&w=1200&q=80',
@@ -127,7 +127,7 @@ export function seed() {
     'https://images.unsplash.com/photo-1600573472550-8090b5e0745e?auto=format&fit=crop&w=1200&q=80'
   ]);
 
-  insertProp.run(
+  await db.query(insertProp, [
     'prop_4',
     'PROP004',
     'Premium 4 BHK Independent Duplex Villa with Private Lawn',
@@ -140,7 +140,7 @@ export function seed() {
     1, 1, 1, 'Family',
     'Exclusive standalone luxury villa in the serene diplomatic belt of Jubilee Hills. 4 palatial en-suite bedrooms, private garden with sit-out, dedicated domestic help quarters with separate washroom, automated covered 2-car garage, and top-tier solar water heating system.',
     prop4Images, 'available', 'own_3'
-  );
+  ]);
 
   const prop5Images = JSON.stringify([
     'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=1200&q=80',
@@ -148,7 +148,7 @@ export function seed() {
     'https://images.unsplash.com/photo-1554995207-c18c203602cb?auto=format&fit=crop&w=1200&q=80'
   ]);
 
-  insertProp.run(
+  await db.query(insertProp, [
     'prop_5',
     'PROP005',
     'Budget-Friendly 2 BHK in Peaceful Residential Colony',
@@ -161,7 +161,7 @@ export function seed() {
     0, 0, 0, 'Family',
     'Affordable and spacious 2 BHK home for family. Large living hall, east-facing entry, borewell + municipal drinking water, separate electrical sub-meter, close to schools and Kukatpally Metro Station.',
     prop5Images, 'available', 'own_1'
-  );
+  ]);
 
   const prop6Images = JSON.stringify([
     'https://images.unsplash.com/photo-1560448204-603b3fc33ddc?auto=format&fit=crop&w=1200&q=80',
@@ -169,7 +169,7 @@ export function seed() {
     'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=1200&q=80'
   ]);
 
-  insertProp.run(
+  await db.query(insertProp, [
     'prop_6',
     'PROP006',
     'Chic 2 BHK Flat next to Financial District Tech Parks',
@@ -182,10 +182,10 @@ export function seed() {
     1, 1, 0, 'Working Professionals',
     'Prime location walking distance to Wipro Circle, Apple, and Capgemini. Features false ceiling with LED ambient lighting, modular kitchen, piped gas line, dedicated covered car parking and power backup.',
     prop6Images, 'available', 'own_2'
-  );
+  ]);
 
   // 4. Customer Requirements (for Rahul)
-  const insertReq = db.prepare(`
+  const insertReq = `
     INSERT INTO customer_requirements (
       id, user_id, preferred_city, preferred_areas, house_types, bhk_list,
       min_rent, max_rent, total_people, tenant_type, parking_needed,
@@ -193,15 +193,15 @@ export function seed() {
       bathrooms_needed, water_req, power_backup_needed, lift_needed, security_needed,
       balcony_needed, gated_community_needed, ground_floor_pref, other_notes
     ) VALUES (
-      ?, ?, ?, ?, ?, ?,
-      ?, ?, ?, ?, ?,
-      ?, ?, ?, ?,
-      ?, ?, ?, ?, ?,
-      ?, ?, ?, ?
+      $1, $2, $3, $4, $5, $6,
+      $7, $8, $9, $10, $11,
+      $12, $13, $14, $15,
+      $16, $17, $18, $19, $20,
+      $21, $22, $23, $24
     )
-  `);
+  `;
 
-  insertReq.run(
+  await db.query(insertReq, [
     'req_1',
     'usr_cust_1',
     'Hyderabad',
@@ -220,22 +220,22 @@ export function seed() {
     '24/7',
     1, 1, 1, 1, 1, 0,
     'Prefer east facing or well-ventilated flat close to international schools.'
-  );
+  ]);
 
   // 5. Enquiries / Leads
-  const insertEnq = db.prepare(`
+  const insertEnq = `
     INSERT INTO enquiries (
       id, enquiry_code, user_id, property_id, customer_name, customer_phone, customer_email,
       preferred_visit_date, preferred_contact_time, message, status, consultant_notes,
       owner_details_shared, commission_amount, deal_closed_at
     ) VALUES (
-      ?, ?, ?, ?, ?, ?, ?,
-      ?, ?, ?, ?, ?,
-      ?, ?, ?
+      $1, $2, $3, $4, $5, $6, $7,
+      $8, $9, $10, $11, $12,
+      $13, $14, $15
     )
-  `);
+  `;
 
-  insertEnq.run(
+  await db.query(insertEnq, [
     'enq_1',
     'ENQ101',
     'usr_cust_1',
@@ -251,9 +251,9 @@ export function seed() {
     1,
     0,
     null
-  );
+  ]);
 
-  insertEnq.run(
+  await db.query(insertEnq, [
     'enq_2',
     'ENQ102',
     'usr_cust_2',
@@ -269,9 +269,9 @@ export function seed() {
     0,
     0,
     null
-  );
+  ]);
 
-  insertEnq.run(
+  await db.query(insertEnq, [
     'enq_3',
     'ENQ103',
     'usr_cust_3',
@@ -287,20 +287,20 @@ export function seed() {
     1,
     25000,
     '2026-08-28 16:30:00'
-  );
+  ]);
 
   // 6. Favorites
-  const insertFav = db.prepare(`
+  const insertFav = `
     INSERT INTO favorites (id, user_id, property_id)
-    VALUES (?, ?, ?)
-  `);
+    VALUES ($1, $2, $3)
+  `;
 
-  insertFav.run('fav_1', 'usr_cust_1', 'prop_1');
-  insertFav.run('fav_2', 'usr_cust_1', 'prop_2');
+  await db.query(insertFav, ['fav_1', 'usr_cust_1', 'prop_1']);
+  await db.query(insertFav, ['fav_2', 'usr_cust_1', 'prop_2']);
 
   console.log('Database seeded successfully!');
 }
 
 if (require.main === module) {
-  seed();
+  seed().catch(console.error);
 }
