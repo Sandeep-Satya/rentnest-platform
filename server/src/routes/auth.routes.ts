@@ -6,7 +6,7 @@ import { generateToken, requireAuth, AuthRequest } from '../middleware/auth';
 const router = Router();
 
 // Register Customer
-router.post('/register', (req: Request, res: Response): void => {
+router.post('/register', async (req: Request, res: Response): Promise<void> => {
   try {
     const { name, email, phone, password } = req.body;
 
@@ -15,8 +15,8 @@ router.post('/register', (req: Request, res: Response): void => {
       return;
     }
 
-    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase());
-    if (existing) {
+    const existingResult = await db.query('SELECT id FROM users WHERE email = $1', [email.toLowerCase()]);
+    if (existingResult.rows.length > 0) {
       res.status(400).json({ error: 'An account with this email already exists.' });
       return;
     }
@@ -24,10 +24,10 @@ router.post('/register', (req: Request, res: Response): void => {
     const id = `usr_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     const passwordHash = bcrypt.hashSync(password, 10);
 
-    db.prepare(`
+    await db.query(`
       INSERT INTO users (id, name, email, phone, password_hash, role)
-      VALUES (?, ?, ?, ?, ?, 'customer')
-    `).run(id, name, email.toLowerCase(), phone || '', passwordHash);
+      VALUES ($1, $2, $3, $4, $5, 'customer')
+    `, [id, name, email.toLowerCase(), phone || '', passwordHash]);
 
     const user = { id, name, email: email.toLowerCase(), role: 'customer' as const };
     const token = generateToken(user);
@@ -44,7 +44,7 @@ router.post('/register', (req: Request, res: Response): void => {
 });
 
 // Login
-router.post('/login', (req: Request, res: Response): void => {
+router.post('/login', async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password } = req.body;
 
@@ -53,7 +53,8 @@ router.post('/login', (req: Request, res: Response): void => {
       return;
     }
 
-    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase()) as any;
+    const userResult = await db.query('SELECT * FROM users WHERE email = $1', [email.toLowerCase()]);
+    const user = userResult.rows[0];
     if (!user) {
       res.status(401).json({ error: 'Invalid email or password.' });
       return;
@@ -86,12 +87,13 @@ router.post('/login', (req: Request, res: Response): void => {
 });
 
 // Demo Login Switcher (for effortless evaluation)
-router.post('/demo-login', (req: Request, res: Response): void => {
+router.post('/demo-login', async (req: Request, res: Response): Promise<void> => {
   try {
     const { role } = req.body; // 'admin' | 'customer'
     const targetEmail = role === 'admin' ? 'admin@rentconsult.com' : 'rahul@example.com';
 
-    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(targetEmail) as any;
+    const userResult = await db.query('SELECT * FROM users WHERE email = $1', [targetEmail]);
+    const user = userResult.rows[0];
     if (!user) {
       res.status(404).json({ error: 'Demo user not found. Please run db seed.' });
       return;
@@ -118,9 +120,10 @@ router.post('/demo-login', (req: Request, res: Response): void => {
 });
 
 // Get Current User Profile
-router.get('/me', requireAuth, (req: AuthRequest, res: Response): void => {
+router.get('/me', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const user = db.prepare('SELECT id, name, email, phone, role, created_at FROM users WHERE id = ?').get(req.user!.id) as any;
+    const userResult = await db.query('SELECT id, name, email, phone, role, created_at FROM users WHERE id = $1', [req.user!.id]);
+    const user = userResult.rows[0];
     if (!user) {
       res.status(404).json({ error: 'User not found.' });
       return;

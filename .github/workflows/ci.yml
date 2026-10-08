@@ -11,6 +11,22 @@ jobs:
     name: Build, Lint & Automated Tests
     runs-on: ubuntu-latest
 
+    # 1. NEW: Spin up a temporary PostgreSQL database using Docker
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: rentnest_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
@@ -29,6 +45,12 @@ jobs:
           npm --prefix client install --include=dev
           npm --prefix server install --include=dev
 
+      # 2. NEW (DevSecOps): Run a quick security audit on dependencies
+      - name: Security Vulnerability Scan (SAST)
+        run: |
+          npm --prefix server audit --audit-level=high || echo "High vulnerabilities found! Check logs."
+          npm --prefix client audit --audit-level=high || echo "High vulnerabilities found! Check logs."
+
       - name: Verify Client Build (React + Vite + TypeScript)
         run: npm --prefix client run build
 
@@ -36,10 +58,16 @@ jobs:
         run: npm --prefix server run build
 
       - name: Run Automated API & Security Tests
+        # 3. NEW: Pass the local Docker database URL to the server for testing
+        env:
+          DATABASE_URL: postgresql://testuser:testpassword@localhost:5432/rentnest_test
+          JWT_SECRET: test_secret_for_ci_only
         run: |
           # Seed demo data for test environment
           AUTO_SEED=true PORT=5000 node server/dist/index.js &
+          
           # Wait for server to start
           sleep 4
+          
           # Execute test suite
           npx ts-node server/test-api.ts

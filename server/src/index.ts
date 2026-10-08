@@ -17,21 +17,6 @@ const app = express();
 const PORT = parseInt(process.env.PORT || '5000', 10);
 const HOST = '0.0.0.0';
 
-// Initialize SQLite schema
-initDatabase();
-
-// Auto-seed initial data if fresh database (only in local dev or when AUTO_SEED is set)
-const shouldAutoSeed = process.env.AUTO_SEED === 'true' || (process.env.NODE_ENV !== 'production' && !process.env.CI);
-try {
-  const propCount = (db.prepare('SELECT COUNT(*) as c FROM properties').get() as any)?.c || 0;
-  if (propCount === 0 && shouldAutoSeed) {
-    console.log('Database empty. Populating initial seed data (properties, owners, demo users)...');
-    seed();
-  }
-} catch (err: any) {
-  console.error('Auto-seed error:', err?.message || err);
-}
-
 // Middlewares
 app.use(cors({
   origin: '*',
@@ -74,7 +59,32 @@ if (clientDistPath) {
   });
 }
 
-// Bind to 0.0.0.0 as required by Render
-app.listen(PORT, HOST, () => {
-  console.log(`🚀 RentNest Server running on http://${HOST}:${PORT}`);
-});
+// Start Server asynchronously to handle DB connection
+async function startServer() {
+  try {
+    // Initialize PostgreSQL schema
+    await initDatabase();
+
+    // Auto-seed initial data if fresh database (only in local dev or when AUTO_SEED is set)
+    const shouldAutoSeed = process.env.AUTO_SEED === 'true' || (process.env.NODE_ENV !== 'production' && !process.env.CI);
+    
+    if (shouldAutoSeed) {
+      const result = await db.query('SELECT COUNT(*) as c FROM properties');
+      const propCount = parseInt(result.rows[0].c, 10) || 0;
+      if (propCount === 0) {
+        console.log('Database empty. Populating initial seed data (properties, owners, demo users)...');
+        await seed();
+      }
+    }
+
+    // Bind to 0.0.0.0 as required by Render
+    app.listen(PORT, HOST, () => {
+      console.log(`🚀 RentNest Server running on http://${HOST}:${PORT}`);
+    });
+  } catch (err: any) {
+    console.error('Failed to start server:', err?.message || err);
+    process.exit(1);
+  }
+}
+
+startServer();
