@@ -22,6 +22,26 @@ pipeline {
             }
         }
 
+        stage('Frontend Dependency Security Scan') {
+            steps {
+                dir('client') {
+                    sh '''
+                        npm audit --audit-level=high || true
+                    '''
+                }
+            }
+        }
+
+        stage('Backend Dependency Security Scan') {
+            steps {
+                dir('server') {
+                    sh '''
+                        npm audit --audit-level=high || true
+                    '''
+                }
+            }
+        }
+
         stage('Build Frontend') {
             steps {
                 dir('client') {
@@ -35,19 +55,18 @@ pipeline {
 
         stage('Build Backend') {
             steps {
-                dir('server') {
-                    sh '''
-                        npm install
-                        npm run build
-                    '''
-                }
+                sh '''
+                    cd server
+                    npm install
+                    npm run build
+                '''
             }
         }
     }
 
     post {
         success {
-            echo 'RentNest frontend and backend builds completed successfully.'
+            echo 'RentNest security scans and frontend/backend builds completed.'
         }
         failure {
             echo 'Build failed. Check the stage logs.'
