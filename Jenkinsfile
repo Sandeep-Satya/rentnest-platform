@@ -1,4 +1,3 @@
-
 pipeline {
     agent any
 
@@ -9,7 +8,8 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                checkout scm
+                git branch: 'main',
+                    url: 'https://github.com/Sandeep-Satya/rentnest-platform.git'
             }
         }
 
