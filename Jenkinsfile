@@ -50,6 +50,24 @@ pipeline {
             }
         }
 
+
+        stage('SonarQube Code Analysis') {
+            steps {
+                script {
+                    def scannerHome = tool 'SonarScanner'
+                    withSonarQubeEnv('SonarQube') {
+                        sh """
+                            "${scannerHome}/bin/sonar-scanner" \
+                              -Dsonar.projectKey=rentnest-platform \
+                              -Dsonar.projectName=RentNest \
+                              -Dsonar.sources=client/src,server \
+                              '-Dsonar.exclusions=**/node_modules/**,**/dist/**,**/build/**,**/coverage/**'
+                        """
+                    }
+                }
+            }
+        }
+
         stage('Build Frontend') {
             steps {
                 dir('client') {
