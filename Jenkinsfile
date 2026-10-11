@@ -22,6 +22,14 @@ pipeline {
             }
         }
 
+        stage('Gitleaks Secret Scanning') {
+            steps {
+                sh '''
+                    gitleaks detect --source . --no-git --redact --verbose
+                '''
+            }
+        }
+
         stage('Frontend Dependency Security Scan') {
             steps {
                 dir('client') {
