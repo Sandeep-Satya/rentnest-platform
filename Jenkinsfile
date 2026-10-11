@@ -58,7 +58,7 @@ pipeline {
                     withSonarQubeEnv('SonarQube') {
                         sh """
                             "${scannerHome}/bin/sonar-scanner" \
-                              -Dsonar.projectKey=rentnest-platform \
+                              -Dsonar.projectKey=RentNest-platform \
                               -Dsonar.projectName=RentNest \
                               -Dsonar.sources=client/src,server \
                               '-Dsonar.exclusions=**/node_modules/**,**/dist/**,**/build/**,**/coverage/**'
